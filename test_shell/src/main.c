@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2025 Stephano Cetola
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/led_strip.h>
 #include <zephyr/usb/usb_device.h>

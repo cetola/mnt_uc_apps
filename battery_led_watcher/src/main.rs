@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2025 Stephano Cetola
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 use notify::{Watcher, RecursiveMode, Event, RecommendedWatcher, Config};
 use std::env;
 use std::io::{self, Write};
