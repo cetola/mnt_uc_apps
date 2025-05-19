@@ -11,6 +11,20 @@
     };
 };
 
+&ws2812_pio0_default {
+    ws2812 {
+        pinmux = <PIO0_P14>;
+    };
+};
+
+&ws2812 {
+    gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
+    chain-length = <7>;
+    color-mapping = <LED_COLOR_ID_GREEN
+                     LED_COLOR_ID_RED
+                     LED_COLOR_ID_BLUE>;
+};
+
 / {
     aliases {
         led-strip = &ws2812;

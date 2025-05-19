@@ -20,14 +20,21 @@ void blink()
     const struct device *led_strip;
     struct led_rgb on = {255, 255, 255};
     struct led_rgb off = {0, 0, 0};
+
+    struct led_rgb ons[7];
+    struct led_rgb offs[7];
+    for (int i = 0; i < 7; i++) {
+        ons[i] = on;
+        offs[i] = off;
+    }
     led_strip = DEVICE_DT_GET(DT_ALIAS(led_strip));
-    led_strip_update_rgb(led_strip, &on, 1);
+    led_strip_update_rgb(led_strip, ons, 7);
     k_sleep(K_MSEC(500));
-    led_strip_update_rgb(led_strip, &off, 1);
+    led_strip_update_rgb(led_strip, offs, 7);
     k_sleep(K_MSEC(500));
-    led_strip_update_rgb(led_strip, &on, 1);
+    led_strip_update_rgb(led_strip, ons, 7);
     k_sleep(K_MSEC(500));
-    led_strip_update_rgb(led_strip, &off, 1);
+    led_strip_update_rgb(led_strip, offs, 7);
     k_sleep(K_MSEC(500));
 }
 
@@ -215,7 +222,13 @@ static int cmd_setled(const struct shell *shell, size_t argc, char **argv)
         return -ENODEV;
     }
 
-    int ret = led_strip_update_rgb(led_strip, &pixel, 1);
+    struct led_rgb pixels[7];
+
+    for (int i = 0; i < 7; i++) {
+        pixels[i] = pixel;
+    }
+
+    int ret = led_strip_update_rgb(led_strip, pixels, 7);
     if (ret) {
         shell_error(shell, "Failed to update LED strip: %d", ret);
         return ret;
