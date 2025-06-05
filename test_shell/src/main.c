@@ -182,6 +182,22 @@ static int cmd_setled(const struct shell *shell, size_t argc, char **argv)
 
     } else if (strcmp(argv[1], "off") == 0) {
         // All channels remain at 0
+    } else if (strcmp(argv[1], "on") == 0) {
+        if (argc != 3) {
+            shell_error(shell, "Usage: setled on <0-255>");
+            return -EINVAL;
+        }
+
+        char *endptr;
+        long i = strtol(argv[2], &endptr, 10);
+        if (*endptr != '\0' || i < 0 || i > 255) {
+            shell_error(shell, "Invalid value. Use 0–255.");
+            return -EINVAL;
+        }
+        pixel.r = (uint8_t)i;
+        pixel.g = (uint8_t)i;
+        pixel.b = (uint8_t)i;
+
     } else if (strcmp(argv[1], "custom") == 0) {
         if (argc != 5) {
             shell_error(shell, "Usage: setled custom <R> <G> <B>");
@@ -212,7 +228,7 @@ static int cmd_setled(const struct shell *shell, size_t argc, char **argv)
         pixel.b = (uint8_t)b;
 
     } else {
-        shell_error(shell, "Invalid color. Use red, green, blue, off, or custom.");
+        shell_error(shell, "Invalid color. Use red, green, blue, on, off, or custom.");
         return -EINVAL;
     }
 
