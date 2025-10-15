@@ -260,6 +260,13 @@ int main(void)
     }
 
     setup_gpio_shell();
+    printk("CPU architecture: %s\n", CONFIG_ARCH);
+#if defined(CONFIG_SOC_RP2350A_HAZARD3)
+    printk("Running on RISC-V Hazard cores!\n");
+#endif
+#if defined(CONFIG_SOC_RP2350A_M33)
+    printk("Running on Cortex-M33 core!\n");
+#endif
     printk("USB shell started!\n");
     return 0;
 }
