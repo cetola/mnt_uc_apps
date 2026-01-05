@@ -14,6 +14,7 @@ use std::env;
 use std::time::Duration;
 use tokio::task;
 use tokio::time::sleep;
+use serialport::SerialPort;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
@@ -28,6 +29,16 @@ async fn main() -> io::Result<()> {
         },
         None => 255,
     };
+
+    // Open and configure serial port once
+    let mut port = serialport::new(SERIAL_PORT, 115200)
+        .timeout(Duration::from_millis(100))
+        .open()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+    // Set to raw mode and assert DTR/RTS
+    configure_serial_port(&mut port)?;
+
     let mut last_status = String::new();
     let mut last_capacity = 0;
 
@@ -54,13 +65,23 @@ async fn main() -> io::Result<()> {
                 _                            => continue,
             };
 
-            if let Err(e) = send_led_command(&color, intensity).await {
+            if let Err(e) = send_led_command(&mut port, &color, intensity).await {
                 eprintln!("Failed to send LED command: {}", e);
             }
         }
 
         sleep(Duration::from_secs(1)).await;
     }
+}
+
+fn configure_serial_port(port: &mut Box<dyn SerialPort>) -> io::Result<()> {
+    // Assert DTR and RTS
+    port.write_data_terminal_ready(true)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    port.write_request_to_send(true)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    
+    Ok(())
 }
 
 async fn read_trimmed(path: &str) -> io::Result<String> {
@@ -77,16 +98,14 @@ async fn read_trimmed(path: &str) -> io::Result<String> {
     .await?
 }
 
-async fn send_led_command(color: &str, intensity: u8) -> io::Result<()> {
+async fn send_led_command(port: &mut Box<dyn SerialPort>, color: &str, intensity: u8) -> io::Result<()> {
     let cmd = format!("setled {} {}\n", color, intensity);
-    let cmd_bytes = cmd.into_bytes();
     println!("Set LED to : {}", color);
-    task::spawn_blocking(move || {
-        let mut port = fs::OpenOptions::new()
-            .write(true)
-            .open(SERIAL_PORT)?;
-        port.write_all(&cmd_bytes)
-    })
-    .await?
+    
+    port.write_all(cmd.as_bytes())
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    port.flush()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    
+    Ok(())
 }
-

@@ -6,4 +6,5 @@ edition = "2021"
 [dependencies]
 tokio   = { version = "1", features = ["full"] }
 notify  = "5"
+serialport = "4.2"
 
