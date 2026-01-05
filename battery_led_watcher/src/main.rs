@@ -101,6 +101,7 @@ async fn read_trimmed(path: &str) -> io::Result<String> {
 async fn send_led_command(port: &mut Box<dyn SerialPort>, color: &str, intensity: u8) -> io::Result<()> {
     let cmd = format!("setled {} {}\n", color, intensity);
     println!("Set LED to : {}", color);
+    let _ = std::fs::write("/tmp/battery_led_color", color);
     
     port.write_all(cmd.as_bytes())
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
