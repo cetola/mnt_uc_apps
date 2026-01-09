@@ -11,6 +11,7 @@ const SERIAL_PORT: &str = "/dev/ttyACM1";
 use std::io::{self, Write};
 use std::fs;
 use std::env;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::task;
 use tokio::time::sleep;
@@ -39,6 +40,10 @@ async fn main() -> io::Result<()> {
     // Set to raw mode and assert DTR/RTS
     configure_serial_port(&mut port)?;
 
+    // Wrap port in Arc<Mutex<>> for safe shared access
+    // This ensures only one write happens at a time
+    let port = Arc::new(Mutex::new(port));
+
     let mut last_status = String::new();
     let mut last_capacity = 0;
 
@@ -65,7 +70,7 @@ async fn main() -> io::Result<()> {
                 _                            => continue,
             };
 
-            if let Err(e) = send_led_command(&mut port, &color, intensity).await {
+            if let Err(e) = send_led_command(port.clone(), &color, intensity).await {
                 eprintln!("Failed to send LED command: {}", e);
             }
         }
@@ -98,15 +103,28 @@ async fn read_trimmed(path: &str) -> io::Result<String> {
     .await?
 }
 
-async fn send_led_command(port: &mut Box<dyn SerialPort>, color: &str, intensity: u8) -> io::Result<()> {
+async fn send_led_command(port: Arc<Mutex<Box<dyn SerialPort>>>, color: &str, intensity: u8) -> io::Result<()> {
     let cmd = format!("setled {} {}\n", color, intensity);
     println!("Set LED to : {}", color);
     let _ = std::fs::write("/tmp/battery_led_color", color);
     
-    port.write_all(cmd.as_bytes())
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-    port.flush()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    // Serial port operations are blocking I/O. Run them in spawn_blocking
+    // to avoid blocking the async runtime, but ensure they complete sequentially.
+    let port_clone = port.clone();
+    let cmd_bytes = cmd.into_bytes();
+    
+    task::spawn_blocking(move || {
+        let mut port_guard = port_clone.lock().unwrap();
+        port_guard.write_all(&cmd_bytes)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        port_guard.flush()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        // Add delay here in the blocking context to ensure transmission completes
+        std::thread::sleep(Duration::from_millis(150));
+        Ok::<(), io::Error>(())
+    })
+    .await??;
     
     Ok(())
 }
+
