@@ -8,7 +8,7 @@ const STATUS_PATH: &str = "/sys/class/power_supply/BAT0/status";
 const CAPACITY_PATH: &str = "/sys/class/power_supply/BAT0/capacity";
 const SERIAL_PORT: &str = "/dev/ttyACM1";
 
-use std::io::{self, Write};
+use std::io::{self, Write, Read};
 use std::fs;
 use std::env;
 use std::sync::{Arc, Mutex};
@@ -41,8 +41,32 @@ async fn main() -> io::Result<()> {
     configure_serial_port(&mut port)?;
 
     // Wrap port in Arc<Mutex<>> for safe shared access
-    // This ensures only one write happens at a time
     let port = Arc::new(Mutex::new(port));
+
+    // Spawn a background task to continuously drain the RX buffer
+    let port_reader = port.clone();
+    task::spawn_blocking(move || {
+        let mut buf = [0u8; 1024];
+        loop {
+            let mut port_guard = port_reader.lock().unwrap();
+            match port_guard.read(&mut buf) {
+                Ok(_n) => {
+                    // Optionally log what was received for debugging:
+                    // if n > 0 {
+                    //     eprintln!("Drained {} bytes from serial port", n);
+                    // }
+                }
+                Err(ref e) if e.kind() == io::ErrorKind::TimedOut => {
+                    // Normal - no data available
+                }
+                Err(e) => {
+                    eprintln!("Error reading from serial port: {}", e);
+                }
+            }
+            drop(port_guard); // Release lock between reads
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    });
 
     let mut last_status = String::new();
     let mut last_capacity = 0;
@@ -85,7 +109,7 @@ fn configure_serial_port(port: &mut Box<dyn SerialPort>) -> io::Result<()> {
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
     port.write_request_to_send(true)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-    
+
     Ok(())
 }
 
@@ -107,24 +131,20 @@ async fn send_led_command(port: Arc<Mutex<Box<dyn SerialPort>>>, color: &str, in
     let cmd = format!("setled {} {}\n", color, intensity);
     println!("Set LED to : {}", color);
     let _ = std::fs::write("/tmp/battery_led_color", color);
-    
-    // Serial port operations are blocking I/O. Run them in spawn_blocking
-    // to avoid blocking the async runtime, but ensure they complete sequentially.
+
     let port_clone = port.clone();
     let cmd_bytes = cmd.into_bytes();
-    
+
     task::spawn_blocking(move || {
         let mut port_guard = port_clone.lock().unwrap();
         port_guard.write_all(&cmd_bytes)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         port_guard.flush()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-        // Add delay here in the blocking context to ensure transmission completes
         std::thread::sleep(Duration::from_millis(150));
         Ok::<(), io::Error>(())
     })
     .await??;
-    
+
     Ok(())
 }
-
